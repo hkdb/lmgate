@@ -1,0 +1,244 @@
+name: Release — Binaries + Docker Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+      ollama_ver: ${{ steps.ollama.outputs.ollama_ver }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "release_tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG=$(git describe --tags --match 'v*' --abbrev=0)
+            echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect Ollama version
+        id: ollama
+        run: |
+          OLLAMA_VER=$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq -r '.tag_name')
+          echo "ollama_ver=$OLLAMA_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Log resolved values
+        run: |
+          echo "Release tag: ${{ steps.tag.outputs.release_tag }}"
+          echo "Ollama version: ${{ steps.ollama.outputs.ollama_ver }}"
+
+  build-binaries:
+    if: github.event_name == 'push'
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - goos: freebsd
+            goarch: amd64
+            name: freebsd-amd64
+          - goos: freebsd
+            goarch: arm64
+            name: freebsd-arm64
+          - goos: darwin
+            goarch: amd64
+            name: macos-amd64
+          - goos: darwin
+            goarch: arm64
+            name: macos-arm64
+          - goos: windows
+            goarch: amd64
+            name: windows-amd64
+          - goos: windows
+            goarch: arm64
+            name: windows-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web frontend
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Go 1.25
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
+        with:
+          go-version: '1.25'
+
+      - name: Build binary
+        run: |
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXT=".exe"
+          fi
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="-s -w" -o "lmgate-${{ matrix.name }}${EXT}" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: lmgate-${{ matrix.name }}
+          path: lmgate-${{ matrix.name }}*
+
+  upload-release:
+    if: github.event_name == 'push'
+    needs: [build-binaries, prepare]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Prepare compose files
+        run: |
+          TAG="${{ needs.prepare.outputs.release_tag }}"
+          for f in docker-compose.standalone.yml \
+                   docker-compose.omni.yml \
+                   docker-compose.omni.nvidia.yml \
+                   docker-compose.omni.amd.yml; do
+            sed "s|ghcr.io/hkdb/lmgate/\([^:]*\):latest|ghcr.io/hkdb/lmgate/\1:${TAG}|g" \
+              "$f" > "artifacts/$f"
+          done
+
+      - name: Upload binaries to GitHub Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
+          files: artifacts/*
+
+  standalone:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push standalone
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ghcr.io/hkdb/lmgate/standalone:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/standalone:latest
+
+  omni:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push omni (CPU)
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: Dockerfile.omni
+          push: true
+          tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni:latest
+
+  omni-nvidia:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push omni-nvidia
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: Dockerfile.omni.nvidia
+          push: true
+          tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}-nvidia:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-nvidia:latest
+
+  omni-amd:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push omni-amd
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: Dockerfile.omni.amd
+          push: true
+          tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}-amd:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-amd:latest

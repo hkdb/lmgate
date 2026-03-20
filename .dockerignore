@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+*.md
+LICENSE
+branding/
+data/
+web/node_modules/
+web/.svelte-kit/
+web/build/
+lmgate
+lmgate-*

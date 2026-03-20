@@ -1,0 +1,39 @@
+# Go
+lmgate
+*.exe
+
+# Data
+data/
+
+# Frontend
+web/node_modules/
+web/.svelte-kit/
+web/build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# SQLite
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets
+.env
+.env*
+!.env.sample
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agents
+.claude
+.crush
+CLAUDE.md

@@ -1,0 +1,54 @@
+name: Question
+description: Ask a question about LM Gate
+labels: ["question"]
+body:
+  - type: dropdown
+    id: deployment-type
+    attributes:
+      label: Deployment Type
+      options:
+        - Docker - Standalone
+        - Omnigate (CPU)
+        - Omnigate (NVIDIA)
+        - Omnigate (AMD)
+        - Binary
+        - Build from Source
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version of LM Gate you are running (e.g. v0.1.0 or 0.1.0)
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host-os
+    attributes:
+      label: Host OS
+      options:
+        - Linux
+        - macOS
+        - FreeBSD
+        - Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional context, screenshots, or configuration details that may be helpful.
+    validations:
+      required: false

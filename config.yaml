@@ -1,0 +1,68 @@
+server:
+  listen: ":443"
+  read_timeout: 30s
+  write_timeout: 120s
+  allowed_origins: ""    # CORS origins (comma-separated), empty = same-origin only
+  allowed_hosts: []      # Allowed Host header values for HTTP->HTTPS redirect
+  tls:
+    disabled: false
+    cert_file: ""
+    key_file: ""
+    auto_cert:
+      domain: ""
+      cache_dir: "./data/certs"
+      email: ""
+
+upstream:
+  url: "http://localhost:11434"
+  timeout: 120s
+  type: "ollama"  # "ollama", "llama.cpp", "lm-studio", "bitnet"
+
+database:
+  path: "./data/lmgate.db"
+
+auth:
+  jwt_secret: ""
+  jwt_expiry: "24h"
+  admin_email: ""
+
+oidc:
+  providers: []
+
+rate_limit:
+  default_rpm: 60
+  enabled: true
+
+logging:
+  level: "info"
+  api_log_enabled: true
+  api_log_retention_days: 90
+  admin_log_enabled: true
+  admin_log_retention_days: 30
+  security_log_enabled: true
+  security_log_retention_days: 180
+  audit_flush_interval: 5    # seconds, runtime-configurable via Settings page
+
+metrics:
+  flush_interval: 30s
+
+security:
+  max_failed_logins: 5          # Runtime-configurable via Settings page
+  password_min_length: 12       # Runtime-configurable via Settings page
+  password_require_special: true # Runtime-configurable via Settings page
+  password_require_number: true  # Runtime-configurable via Settings page
+  user_cache_ttl: 30            # Runtime-configurable via Settings page (seconds)
+  request_body_limit: 10        # MB, static (restart required)
+  response_body_limit: 100      # MB, static (restart required)
+  security_headers_enabled: true # Static (restart required)
+  header_x_frame_options: "DENY"
+  header_csp: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+  header_referrer_policy: "strict-origin-when-cross-origin"
+  header_xss_protection: "1; mode=block"
+  hsts_max_age: 31536000
+  admin_allowed_networks: ""  # Runtime-configurable via Settings page (comma-separated IPs/CIDRs)
+
+webauthn:
+  rp_display_name: "LM Gate"
+  rp_id: ""                     # e.g. "example.com" — required to enable passkey support
+  rp_origins: []                # e.g. ["https://example.com"] — auto-derived from rp_id if unset

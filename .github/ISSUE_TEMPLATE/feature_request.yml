@@ -1,0 +1,70 @@
+name: Feature Request
+description: Suggest a new feature for LM Gate
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: deployment-type
+    attributes:
+      label: Deployment Type
+      options:
+        - Docker - Standalone
+        - Omnigate (CPU)
+        - Omnigate (NVIDIA)
+        - Omnigate (AMD)
+        - Binary
+        - Build from Source
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version of LM Gate you are running (e.g. v0.1.0 or 0.1.0)
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: host-os
+    attributes:
+      label: Host OS
+      options:
+        - Linux
+        - macOS
+        - FreeBSD
+        - Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What is the use case?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature or solution you would like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or examples that may be helpful.
+    validations:
+      required: false

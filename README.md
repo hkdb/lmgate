@@ -64,7 +64,7 @@ See [docs/CONFIGS.md](docs/CONFIGS.md) for the full configuration reference.
 
 ![Architecture](docs/Arch-Banner.jpg)
 
-Under the hood:
+**Under the hood:**
 
 ```
   Request                        HOT PATH                         Upstream
@@ -94,6 +94,10 @@ Under the hood:
 All logging, metrics, and token extraction run in background goroutines — **zero I/O on the hot path**. The audit middleware fires a goroutine that sends to a buffered channel and returns immediately; if the channel is full, the entry is dropped rather than blocking. Security events print a `[SECURITY]`-prefixed line to stdout for fail2ban, then enqueue the DB write asynchronously through the same channel.
 
 Data is stored in a single SQLite database (WAL mode). The admin dashboard is a SvelteKit SPA compiled to static assets and embedded into the Go binary at build time.
+
+**Scaling:**
+
+LM Gate is designed to [scale deployments behind popular load balancers](docs/SCALE.md) and tested with NGINX.
 
 ### 🔒 TLS Modes
 ---

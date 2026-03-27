@@ -62,6 +62,8 @@ See [docs/CONFIGS.md](docs/CONFIGS.md) for the full configuration reference.
 
 LM Gate can gate OAuth2/oidc logins by a specific user group. This works out of the box for most OAuth2 providers except for Microsoft and Google. In the case that Microsoft and Google group gating is required, an intermediary auth layer must be setup to facilitate. See [docs/MGGROUPS.md](docs/MGGROUPS.md) for details.
 
+See [docs/FAIL2BAN.md](docs/FAIL2BAN.md) for **fail2ban** integration instructions. 
+
 ## 🏗️ Architecture
 ---
 

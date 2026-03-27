@@ -23,12 +23,13 @@ type GeneralSettings struct {
 	Enforce2FA               bool   `json:"enforce_2fa"`
 	PasswordExpiryDays       int    `json:"password_expiry_days"`
 	AdminAllowedNetworks     string `json:"admin_allowed_networks"`
+	GatewayAllowedNetworks   string `json:"gateway_allowed_networks"`
 }
 
 func GetGeneralSettings(db *sql.DB, defaults GeneralSettings) (GeneralSettings, error) {
 	s := defaults
 
-	rows, err := db.Query(`SELECT key, value FROM app_settings WHERE key IN ('rate_limit_enabled', 'rate_limit_default_rpm', 'api_log_enabled', 'api_log_retention_days', 'admin_log_enabled', 'admin_log_retention_days', 'security_log_enabled', 'security_log_retention_days', 'audit_flush_interval', 'max_failed_logins', 'password_min_length', 'password_require_special', 'password_require_number', 'user_cache_ttl', 'enforce_2fa', 'password_expiry_days', 'admin_allowed_networks')`)
+	rows, err := db.Query(`SELECT key, value FROM app_settings WHERE key IN ('rate_limit_enabled', 'rate_limit_default_rpm', 'api_log_enabled', 'api_log_retention_days', 'admin_log_enabled', 'admin_log_retention_days', 'security_log_enabled', 'security_log_retention_days', 'audit_flush_interval', 'max_failed_logins', 'password_min_length', 'password_require_special', 'password_require_number', 'user_cache_ttl', 'enforce_2fa', 'password_expiry_days', 'admin_allowed_networks', 'gateway_allowed_networks')`)
 	if err != nil {
 		return s, err
 	}
@@ -92,6 +93,8 @@ func GetGeneralSettings(db *sql.DB, defaults GeneralSettings) (GeneralSettings, 
 			}
 		case "admin_allowed_networks":
 			s.AdminAllowedNetworks = value
+		case "gateway_allowed_networks":
+			s.GatewayAllowedNetworks = value
 		}
 	}
 
@@ -174,6 +177,9 @@ func SaveGeneralSettings(db *sql.DB, s GeneralSettings) error {
 		return err
 	}
 	if _, err := stmt.Exec("admin_allowed_networks", s.AdminAllowedNetworks); err != nil {
+		return err
+	}
+	if _, err := stmt.Exec("gateway_allowed_networks", s.GatewayAllowedNetworks); err != nil {
 		return err
 	}
 

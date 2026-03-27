@@ -51,8 +51,8 @@ func (a *Admin) RegisterRoutes(app *fiber.App, jwtSecret string) {
 	api.Post("/login", a.Login)
 	api.Post("/logout", a.Logout)
 	api.Get("/auth/providers", a.ListAuthProviders)
-	api.Get("/oauth/:provider", a.OAuthRedirect)
 	api.Get("/oauth/callback", a.OAuthCallback)
+	api.Get("/oauth/:provider", a.OAuthRedirect)
 
 	// CSRF token seeding endpoint (cookie set by middleware on GET)
 	api.Get("/csrf-token", func(c *fiber.Ctx) error {
@@ -104,6 +104,15 @@ func (a *Admin) RegisterRoutes(app *fiber.App, jwtSecret string) {
 	protected.Put("/users/:id", a.UpdateUser)
 	protected.Delete("/users/:id", a.DeleteUser)
 	protected.Post("/users/:id/reset-2fa", a.ResetUser2FA)
+
+	// Groups
+	protected.Get("/groups", a.ListGroups)
+	protected.Post("/groups", a.CreateGroup)
+	protected.Get("/groups/:id", a.GetGroup)
+	protected.Put("/groups/:id", a.UpdateGroup)
+	protected.Delete("/groups/:id", a.DeleteGroup)
+	protected.Post("/groups/:id/members", a.AddGroupMember)
+	protected.Delete("/groups/:id/members/:userId", a.RemoveGroupMember)
 
 	// Tokens
 	protected.Get("/tokens", a.ListTokens)

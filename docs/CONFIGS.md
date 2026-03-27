@@ -74,6 +74,7 @@ security:
   hsts_max_age: 31536000
   encryption_key: ""            # required — key for encrypting secrets (TOTP, OIDC)
   admin_allowed_networks: ""    # comma-separated IPs/CIDRs
+  gateway_allowed_networks: ""  # comma-separated IPs/CIDRs for LLM proxy access
 
 webauthn:
   rp_display_name: "LM Gate"
@@ -93,6 +94,7 @@ Some security settings can be changed at runtime through the Settings page (no r
 | `password_require_number` | true | Require at least one digit |
 | `user_cache_ttl` | 30 | User cache TTL in seconds |
 | `admin_allowed_networks` | (empty) | Restrict /admin to these IPs/CIDRs (comma-separated) |
+| `gateway_allowed_networks` | (empty) | Restrict LLM proxy to these IPs/CIDRs (comma-separated) |
 | `audit_flush_interval` | 5 | Audit log batch flush interval in seconds |
 
 Static settings require a restart to take effect:
@@ -166,6 +168,7 @@ LMGATE_WEBAUTHN_RP_ORIGINS=https://domain.name
 | `LMGATE_HEADER_XSS_PROTECTION` | X-XSS-Protection header value |
 | `LMGATE_HSTS_MAX_AGE` | HSTS max-age in seconds |
 | `LMGATE_ADMIN_ALLOWED_NETWORKS` | Restrict /admin to these IPs/CIDRs (comma-separated, empty = unrestricted) |
+| `LMGATE_GATEWAY_ALLOWED_NETWORKS` | Restrict LLM proxy/API to these IPs/CIDRs (comma-separated, empty = unrestricted) |
 | `LMGATE_TLS_CERT_FILE` | TLS certificate file path |
 | `LMGATE_TLS_KEY_FILE` | TLS key file path |
 | `LMGATE_TLS_AUTOCERT_DOMAIN` | Let's Encrypt auto-cert domain |

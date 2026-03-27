@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hkdb/lmgate/internal/auth"
+	"github.com/hkdb/lmgate/internal/models"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -45,7 +46,9 @@ func ModelACL(db *sql.DB) fiber.Handler {
 			return c.Next()
 		}
 
-		allowed, err := checkModelAccess(db, u.UserID, payload.Model)
+		groupIDs, _ := models.GetGroupIDsForUser(db, u.UserID)
+
+		allowed, err := checkModelAccess(db, u.UserID, payload.Model, groupIDs)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "acl check failed"})
 		}
@@ -61,55 +64,135 @@ func ModelACL(db *sql.DB) fiber.Handler {
 	}
 }
 
-func checkModelAccess(db *sql.DB, userID, model string) (bool, error) {
+func checkModelAccess(db *sql.DB, userID, model string, groupIDs []string) (bool, error) {
+	// Step 1: Check user-specific ACLs
 	rows, err := db.Query(
-		`SELECT model, allowed FROM model_acls WHERE user_id = ?`, userID,
+		`SELECT model, allowed FROM model_acls WHERE user_id = ? AND (group_id IS NULL OR group_id = '')`, userID,
 	)
 	if err != nil {
 		return false, err
 	}
 	defer rows.Close()
 
-	var acls []struct {
+	type aclEntry struct {
 		pattern string
 		allowed bool
 	}
 
+	var userACLs []aclEntry
 	for rows.Next() {
-		var a struct {
-			pattern string
-			allowed bool
-		}
+		var a aclEntry
 		if err := rows.Scan(&a.pattern, &a.allowed); err != nil {
 			return false, err
 		}
-		acls = append(acls, a)
+		userACLs = append(userACLs, a)
 	}
-
 	if err := rows.Err(); err != nil {
 		return false, err
 	}
 
-	// No ACLs = allow all
-	if len(acls) == 0 {
-		return true, nil
-	}
-
-	// Check for exact match first, then wildcard patterns
-	for _, acl := range acls {
+	// If user-specific ACL matches, return that result
+	for _, acl := range userACLs {
 		if acl.pattern == model {
 			return acl.allowed, nil
 		}
 	}
-
-	for _, acl := range acls {
+	for _, acl := range userACLs {
 		if matchPattern(acl.pattern, model) {
 			return acl.allowed, nil
 		}
 	}
 
-	// No matching ACL = deny (if ACLs exist but none match)
-	return false, nil
+	// Step 2: Check group ACLs
+	if len(groupIDs) > 0 {
+		placeholders := strings.Repeat("?,", len(groupIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+
+		args := make([]any, len(groupIDs))
+		for i, id := range groupIDs {
+			args[i] = id
+		}
+
+		groupRows, err := db.Query(
+			`SELECT model, allowed FROM model_acls WHERE group_id IN (`+placeholders+`)`,
+			args...,
+		)
+		if err != nil {
+			return false, err
+		}
+		defer groupRows.Close()
+
+		var groupACLs []aclEntry
+		for groupRows.Next() {
+			var a aclEntry
+			if err := groupRows.Scan(&a.pattern, &a.allowed); err != nil {
+				return false, err
+			}
+			groupACLs = append(groupACLs, a)
+		}
+		if err := groupRows.Err(); err != nil {
+			return false, err
+		}
+
+		// Among matching group ACLs: if any allow, allow; if all deny, deny
+		hasMatch := false
+		for _, acl := range groupACLs {
+			if acl.pattern == model || matchPattern(acl.pattern, model) {
+				hasMatch = true
+				if acl.allowed {
+					return true, nil
+				}
+			}
+		}
+		if hasMatch {
+			return false, nil
+		}
+	}
+
+	// Step 3: Check if any ACLs exist at all
+	var totalACLs int
+	err = db.QueryRow(`SELECT COUNT(*) FROM model_acls`).Scan(&totalACLs)
+	if err != nil {
+		return false, err
+	}
+
+	// No ACLs at all → allow (default open)
+	if totalACLs == 0 {
+		return true, nil
+	}
+
+	// Check if any ACLs target this user or their groups specifically
+	var userACLCount int
+	err = db.QueryRow(`SELECT COUNT(*) FROM model_acls WHERE user_id = ? AND (group_id IS NULL OR group_id = '')`, userID).Scan(&userACLCount)
+	if err != nil {
+		return false, err
+	}
+
+	if userACLCount > 0 {
+		// User has ACLs but none matched → deny
+		return false, nil
+	}
+
+	if len(groupIDs) > 0 {
+		placeholders := strings.Repeat("?,", len(groupIDs))
+		placeholders = placeholders[:len(placeholders)-1]
+		args := make([]any, len(groupIDs))
+		for i, id := range groupIDs {
+			args[i] = id
+		}
+		var groupACLCount int
+		err = db.QueryRow(`SELECT COUNT(*) FROM model_acls WHERE group_id IN (`+placeholders+`)`, args...).Scan(&groupACLCount)
+		if err != nil {
+			return false, err
+		}
+		if groupACLCount > 0 {
+			// User's groups have ACLs but none matched → deny
+			return false, nil
+		}
+	}
+
+	// No ACLs targeting this user or their groups → allow
+	return true, nil
 }
 
 func matchPattern(pattern, model string) bool {

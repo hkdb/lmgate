@@ -4,11 +4,14 @@
 
 	interface OIDCProvider {
 		id: string;
+		provider_type: string;
 		name: string;
 		issuer_url: string;
 		client_id: string;
 		client_secret: string;
 		scopes: string;
+		groups_claim: string;
+		required_group: string;
 		enabled: boolean;
 		created_at: string;
 	}
@@ -31,11 +34,13 @@
 		enforce_2fa: boolean;
 		password_expiry_days: number;
 		admin_allowed_networks: string;
+		gateway_allowed_networks: string;
 	}
 
 	// Section collapse state
 	let generalOpen = $state(true);
 	let securityOpen = $state(false);
+	let gatewaySecurityOpen = $state(false);
 	let oidcOpen = $state(false);
 
 	// General settings state
@@ -56,7 +61,8 @@
 		user_cache_ttl: 30,
 		enforce_2fa: false,
 		password_expiry_days: 0,
-		admin_allowed_networks: ''
+		admin_allowed_networks: '',
+		gateway_allowed_networks: ''
 	});
 	let generalLoading = $state(true);
 	let generalSaving = $state(false);
@@ -70,11 +76,15 @@
 
 	let showForm = $state(false);
 	let editingProvider = $state<OIDCProvider | null>(null);
+	let formProviderType = $state('google');
+	let formCustomType = $state('');
 	let formName = $state('');
 	let formIssuer = $state('');
 	let formClientId = $state('');
 	let formClientSecret = $state('');
 	let formScopes = $state('openid email profile');
+	let formGroupsClaim = $state('groups');
+	let formRequiredGroup = $state('');
 	let formEnabled = $state(true);
 	let formError = $state('');
 	let formLoading = $state(false);
@@ -102,7 +112,12 @@
 		generalLoading = true;
 		generalError = '';
 		try {
-			generalSettings = await get<GeneralSettings>('/settings/general');
+			const data = await get<GeneralSettings>('/settings/general');
+			// Convert comma-separated to newline-separated for textarea display
+			if (data.gateway_allowed_networks) {
+				data.gateway_allowed_networks = data.gateway_allowed_networks.split(',').map(s => s.trim()).filter(Boolean).join('\n');
+			}
+			generalSettings = data;
 		} catch (err) {
 			generalError = err instanceof Error ? err.message : 'Failed to load settings';
 		} finally {
@@ -115,7 +130,17 @@
 		generalError = '';
 		generalSuccess = '';
 		try {
-			generalSettings = await put<GeneralSettings>('/settings/general', generalSettings);
+			// Convert newline-separated gateway networks to comma-separated for storage
+			const payload = { ...generalSettings };
+			if (payload.gateway_allowed_networks) {
+				payload.gateway_allowed_networks = payload.gateway_allowed_networks.split('\n').map(s => s.trim()).filter(Boolean).join(',');
+			}
+			const saved = await put<GeneralSettings>('/settings/general', payload);
+			// Convert back to newline-separated for display
+			if (saved.gateway_allowed_networks) {
+				saved.gateway_allowed_networks = saved.gateway_allowed_networks.split(',').map(s => s.trim()).filter(Boolean).join('\n');
+			}
+			generalSettings = saved;
 			generalSuccess = 'Settings saved successfully';
 			setTimeout(() => (generalSuccess = ''), 3000);
 		} catch (err) {
@@ -137,13 +162,19 @@
 		}
 	}
 
+	const knownProviderTypes = ['google', 'github', 'azure', 'okta', 'auth0', 'keycloak', 'authentik'];
+
 	function openCreate() {
 		editingProvider = null;
+		formProviderType = 'google';
+		formCustomType = '';
 		formName = '';
 		formIssuer = '';
 		formClientId = '';
 		formClientSecret = '';
 		formScopes = 'openid email profile';
+		formGroupsClaim = 'groups';
+		formRequiredGroup = '';
 		formEnabled = true;
 		formError = '';
 		showForm = true;
@@ -151,11 +182,15 @@
 
 	function openEdit(provider: OIDCProvider) {
 		editingProvider = provider;
+		formProviderType = knownProviderTypes.includes(provider.provider_type) ? provider.provider_type : 'other';
+		formCustomType = knownProviderTypes.includes(provider.provider_type) ? '' : provider.provider_type;
 		formName = provider.name;
 		formIssuer = provider.issuer_url;
 		formClientId = provider.client_id;
 		formClientSecret = '';
 		formScopes = provider.scopes;
+		formGroupsClaim = provider.groups_claim || 'groups';
+		formRequiredGroup = provider.required_group || '';
 		formEnabled = provider.enabled;
 		formError = '';
 		showForm = true;
@@ -169,8 +204,15 @@
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 
-		if (!formName || !formIssuer || !formClientId) {
-			formError = 'Name, Issuer URL, and Client ID are required';
+		const resolvedType = formProviderType === 'other' ? formCustomType.trim().toLowerCase() : formProviderType;
+
+		if (!resolvedType || !formName || !formIssuer || !formClientId) {
+			formError = 'Provider Type, Display Name, Issuer URL, and Client ID are required';
+			return;
+		}
+
+		if (formProviderType === 'other' && !/^[a-z0-9_-]+$/.test(resolvedType)) {
+			formError = 'Custom provider identifier must contain only lowercase letters, numbers, hyphens, and underscores';
 			return;
 		}
 
@@ -184,10 +226,13 @@
 
 		try {
 			const body: Record<string, unknown> = {
+				provider_type: resolvedType,
 				name: formName,
 				issuer_url: formIssuer,
 				client_id: formClientId,
 				scopes: formScopes,
+				groups_claim: formGroupsClaim,
+				required_group: formRequiredGroup,
 				enabled: formEnabled
 			};
 			if (formClientSecret) body.client_secret = formClientSecret;
@@ -509,6 +554,44 @@
 							Comma-separated IPs or CIDRs. Empty = unrestricted (all IPs allowed).
 						</p>
 					</div>
+
+					</div>
+			{/if}
+
+			<!-- Divider between Security and Gateway Security -->
+			<div class="border-t border-border-primary my-4"></div>
+
+			<!-- Gateway Security sub-section -->
+			<div class="mb-2">
+				<button
+					onclick={() => (gatewaySecurityOpen = !gatewaySecurityOpen)}
+					class="flex w-full items-center gap-2 text-lg font-semibold hover:text-accent transition-colors"
+				>
+					{#if gatewaySecurityOpen}
+						<ChevronDown class="h-5 w-5" />
+					{:else}
+						<ChevronRight class="h-5 w-5" />
+					{/if}
+					Gateway Security
+				</button>
+			</div>
+			{#if gatewaySecurityOpen}
+				<div class="space-y-4 pb-4">
+					<div>
+						<label for="gateway-allowed-networks" class="mb-1.5 block text-sm text-text-secondary">
+							Gateway allowed networks
+						</label>
+						<textarea
+							id="gateway-allowed-networks"
+							bind:value={generalSettings.gateway_allowed_networks}
+							placeholder={"e.g.\n10.0.0.0/24\n192.168.1.100\n::1"}
+							rows="4"
+							class="w-full max-w-md rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent font-mono"
+						></textarea>
+						<p class="mt-1 text-xs text-text-muted">
+							One IP or CIDR subnet per line. Empty = unrestricted (all IPs allowed).
+						</p>
+					</div>
 				</div>
 			{/if}
 
@@ -586,6 +669,10 @@
 								</div>
 								<div class="mt-2 space-y-1 text-sm text-text-secondary">
 									<div>
+										<span class="text-text-muted">Type:</span>
+										{provider.provider_type}
+									</div>
+									<div>
 										<span class="text-text-muted">Issuer:</span>
 										{provider.issuer_url}
 									</div>
@@ -597,6 +684,16 @@
 										<span class="text-text-muted">Scopes:</span>
 										{provider.scopes}
 									</div>
+									<div>
+										<span class="text-text-muted">Groups Claim:</span>
+										{provider.groups_claim || 'groups'}
+									</div>
+									{#if provider.required_group}
+										<div>
+											<span class="text-text-muted">Required Group:</span>
+											{provider.required_group}
+										</div>
+									{/if}
 								</div>
 							</div>
 							<div class="flex items-center gap-1">
@@ -645,12 +742,47 @@
 					{/if}
 
 					<div>
-						<label for="oidc-name" class="mb-1.5 block text-sm text-text-secondary">Name</label>
+						<label for="oidc-provider-type" class="mb-1.5 block text-sm text-text-secondary">Provider Type</label>
+						<select
+							id="oidc-provider-type"
+							bind:value={formProviderType}
+							class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
+						>
+							<option value="google">Google</option>
+							<option value="github">GitHub</option>
+							<option value="azure">Azure AD</option>
+							<option value="okta">Okta</option>
+							<option value="auth0">Auth0</option>
+							<option value="keycloak">Keycloak</option>
+							<option value="authentik">Authentik</option>
+							<option value="other">Other</option>
+						</select>
+					</div>
+
+					{#if formProviderType === 'other'}
+						<div>
+							<label for="oidc-custom-type" class="mb-1.5 block text-sm text-text-secondary">Custom Provider Identifier</label>
+							<input
+								id="oidc-custom-type"
+								type="text"
+								bind:value={formCustomType}
+								placeholder="e.g. authelia, zitadel"
+								pattern="[a-z0-9_-]+"
+								class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
+							/>
+							<p class="mt-1 text-xs text-text-muted">
+								Lowercase letters, numbers, hyphens, and underscores only.
+							</p>
+						</div>
+					{/if}
+
+					<div>
+						<label for="oidc-name" class="mb-1.5 block text-sm text-text-secondary">Display Name</label>
 						<input
 							id="oidc-name"
 							type="text"
 							bind:value={formName}
-							placeholder="Google, GitHub, etc."
+							placeholder="e.g. Company Google SSO"
 							class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
 						/>
 					</div>
@@ -703,6 +835,39 @@
 							class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
 						/>
 						<p class="mt-1 text-xs text-text-muted">Space-separated list of scopes</p>
+					</div>
+
+					<div>
+						<label for="oidc-groups-claim" class="mb-1.5 block text-sm text-text-secondary">
+							Groups Claim
+						</label>
+						<input
+							id="oidc-groups-claim"
+							type="text"
+							bind:value={formGroupsClaim}
+							placeholder="groups"
+							class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
+						/>
+						<p class="mt-1 text-xs text-text-muted">JWT claim name containing user groups (default: groups)</p>
+					</div>
+
+					<div>
+						<label for="oidc-required-group" class="mb-1.5 block text-sm text-text-secondary">
+							Required Group
+						</label>
+						<input
+							id="oidc-required-group"
+							type="text"
+							bind:value={formRequiredGroup}
+							placeholder="e.g. LM Gate"
+							class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
+						/>
+						<p class="mt-1 text-xs text-text-muted">
+							If set, users must belong to this group (from the identity provider) to log in. Leave empty to allow all authenticated users.
+						</p>
+						<p class="mt-1 text-xs text-text-muted">
+							If you are looking to gate by a Microsoft or Google group, see <a href="https://github.com/hkdb/lmgate/blob/main/docs/MGGROUPS.md" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">this guide</a>.
+						</p>
 					</div>
 
 					<div class="flex items-center gap-2">

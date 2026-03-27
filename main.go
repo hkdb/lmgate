@@ -40,7 +40,7 @@ import (
 )
 
 // Version of LM Gate.
-var Version = "v0.0.1"
+var Version = "v0.1.0"
 
 //go:embed all:web/build
 var webAssets embed.FS
@@ -118,6 +118,7 @@ func main() {
 		Enforce2FA:               cfg.Security.Enforce2FA,
 		PasswordExpiryDays:       cfg.Security.PasswordExpiryDays,
 		AdminAllowedNetworks:     cfg.Security.AdminAllowedNetworks,
+		GatewayAllowedNetworks:   cfg.Security.GatewayAllowedNetworks,
 	}
 	savedSettings, err := models.GetGeneralSettings(db, generalDefaults)
 	if err != nil {
@@ -140,6 +141,8 @@ func main() {
 	cfg.Security.Enforce2FA = savedSettings.Enforce2FA
 	cfg.Security.PasswordExpiryDays = savedSettings.PasswordExpiryDays
 	cfg.Security.AdminAllowedNetworks = savedSettings.AdminAllowedNetworks
+	cfg.Security.GatewayAllowedNetworks = savedSettings.GatewayAllowedNetworks
+	middleware.ParseGatewayACL(cfg.Security.GatewayAllowedNetworks)
 	auth.SetUserCacheTTL(time.Duration(savedSettings.UserCacheTTL) * time.Second)
 
 	go sendTelemetry(cfg, db)
@@ -236,6 +239,7 @@ func main() {
 
 	// Proxied routes: everything not under /admin/
 	app.Use(
+		middleware.GatewayNetworkRestrict(),
 		auth.Middleware(db, cfg.Auth.JWTSecret, middleware.NewSecurityLogger(cfg)),
 		middleware.RateLimit(cfg, middleware.NewRateLimitLogger(cfg)),
 		middleware.ModelACL(db),

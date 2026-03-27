@@ -35,9 +35,13 @@ func (a *Admin) ListAuthProviders(c *fiber.Ctx) error {
 	var result []providerInfo
 	a.Providers.Range(func(key, value any) bool {
 		provider := value.(*auth.OIDCProvider)
+		displayName := provider.Name
+		if displayName == "" {
+			displayName = key.(string)
+		}
 		result = append(result, providerInfo{
 			ID:      provider.ID,
-			Name:    key.(string),
+			Name:    displayName,
 			AuthURL: fmt.Sprintf("/admin/api/oauth/%s", key.(string)),
 		})
 		return true
@@ -116,6 +120,31 @@ func (a *Admin) OAuthCallback(c *fiber.Ctx) error {
 
 	if userInfo == nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "authentication failed"})
+	}
+
+	// Check required group login gate
+	var provider *auth.OIDCProvider
+	a.Providers.Range(func(key, value any) bool {
+		if key.(string) == providerType {
+			provider = value.(*auth.OIDCProvider)
+			return false
+		}
+		return true
+	})
+
+	if provider != nil && provider.RequiredGroup != "" {
+		inGroup := false
+		for _, g := range userInfo.Groups {
+			if g == provider.RequiredGroup {
+				inGroup = true
+				break
+			}
+		}
+		if !inGroup {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "access denied - you are not in the required group, contact your administrator",
+			})
+		}
 	}
 
 	user, err := auth.FindOrCreateOIDCUser(a.DB, providerType, userInfo, a.Config.Auth.AdminEmail)
@@ -298,10 +327,10 @@ func (a *Admin) LoadOIDCProviders() {
 }
 
 func (a *Admin) loadOIDCProvider(id string) error {
-	var providerType, clientID, clientSecret, clientSecretSalt, issuerURL string
+	var providerType, name, clientID, clientSecret, clientSecretSalt, issuerURL, scopes, groupsClaim, requiredGroup string
 	err := a.DB.QueryRow(
-		`SELECT provider_type, client_id, client_secret, client_secret_salt, issuer_url FROM oidc_providers WHERE id = ?`, id,
-	).Scan(&providerType, &clientID, &clientSecret, &clientSecretSalt, &issuerURL)
+		`SELECT provider_type, name, client_id, client_secret, client_secret_salt, issuer_url, scopes, groups_claim, required_group FROM oidc_providers WHERE id = ?`, id,
+	).Scan(&providerType, &name, &clientID, &clientSecret, &clientSecretSalt, &issuerURL, &scopes, &groupsClaim, &requiredGroup)
 	if err != nil {
 		return err
 	}
@@ -314,12 +343,14 @@ func (a *Admin) loadOIDCProvider(id string) error {
 	// Build redirect URL based on server config
 	redirectURL := a.buildOIDCRedirectURL()
 
-	provider, err := auth.NewOIDCProvider(providerType, clientID, clientSecret, issuerURL, redirectURL)
+	provider, err := auth.NewOIDCProvider(providerType, clientID, clientSecret, issuerURL, redirectURL, scopes, groupsClaim)
 	if err != nil {
 		return err
 	}
 
 	provider.ID = id
+	provider.Name = name
+	provider.RequiredGroup = requiredGroup
 	a.Providers.Store(providerType, provider)
 	return nil
 }
@@ -331,11 +362,21 @@ func (a *Admin) buildOIDCRedirectURL() string {
 	}
 
 	if len(a.Config.Server.AllowedHosts) > 0 {
-		return fmt.Sprintf("%s://%s/admin/api/oauth/callback", scheme, a.Config.Server.AllowedHosts[0])
+		host := a.Config.Server.AllowedHosts[0]
+		if !strings.Contains(host, ":") {
+			if i := strings.LastIndex(a.Config.Server.Listen, ":"); i >= 0 {
+				host += a.Config.Server.Listen[i:]
+			}
+		}
+		return fmt.Sprintf("%s://%s/admin/api/oauth/callback", scheme, host)
 	}
 
 	if a.Config.Server.TLS.Disabled {
-		return fmt.Sprintf("http://localhost%s/admin/api/oauth/callback", a.Config.Server.Listen)
+		port := a.Config.Server.Listen
+		if i := strings.LastIndex(port, ":"); i >= 0 {
+			port = port[i:]
+		}
+		return fmt.Sprintf("http://localhost%s/admin/api/oauth/callback", port)
 	}
 
 	return "https://localhost/admin/api/oauth/callback"
@@ -344,14 +385,15 @@ func (a *Admin) buildOIDCRedirectURL() string {
 // Model ACL handlers
 
 type modelACLRow struct {
-	ID      string `json:"id"`
-	UserID  string `json:"user_id"`
-	Model   string `json:"model"`
-	Allowed bool   `json:"allowed"`
+	ID      string  `json:"id"`
+	UserID  string  `json:"user_id"`
+	Model   string  `json:"model"`
+	Allowed bool    `json:"allowed"`
+	GroupID *string `json:"group_id,omitempty"`
 }
 
 func (a *Admin) ListACLs(c *fiber.Ctx) error {
-	query := `SELECT id, user_id, model, allowed FROM model_acls`
+	query := `SELECT id, user_id, model, allowed, group_id FROM model_acls`
 	var args []any
 	if userID := c.Query("user_id"); userID != "" {
 		query += ` WHERE user_id = ?`
@@ -368,8 +410,12 @@ func (a *Admin) ListACLs(c *fiber.Ctx) error {
 	var acls []modelACLRow
 	for rows.Next() {
 		var acl modelACLRow
-		if err := rows.Scan(&acl.ID, &acl.UserID, &acl.Model, &acl.Allowed); err != nil {
+		var groupID sql.NullString
+		if err := rows.Scan(&acl.ID, &acl.UserID, &acl.Model, &acl.Allowed, &groupID); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to scan acl"})
+		}
+		if groupID.Valid {
+			acl.GroupID = &groupID.String
 		}
 		acls = append(acls, acl)
 	}
@@ -382,16 +428,33 @@ func (a *Admin) CreateACL(c *fiber.Ctx) error {
 		UserID  string `json:"user_id"`
 		Model   string `json:"model"`
 		Allowed bool   `json:"allowed"`
+		GroupID string `json:"group_id"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
 	}
 
-	if req.UserID == "" || req.Model == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id and model are required"})
+	if req.Model == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "model is required"})
+	}
+
+	if req.UserID == "" && req.GroupID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_id or group_id is required"})
 	}
 
 	id := uuid.New().String()
+
+	if req.GroupID != "" {
+		_, err := a.DB.Exec(
+			`INSERT INTO model_acls (id, user_id, model, allowed, group_id) VALUES (?, '', ?, ?, ?)`,
+			id, req.Model, req.Allowed, req.GroupID,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create acl"})
+		}
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": id})
+	}
+
 	_, err := a.DB.Exec(
 		`INSERT INTO model_acls (id, user_id, model, allowed) VALUES (?, ?, ?, ?)
 		 ON CONFLICT(user_id, model) DO UPDATE SET allowed = excluded.allowed`,

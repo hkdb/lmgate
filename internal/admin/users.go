@@ -110,7 +110,7 @@ func (a *Admin) Login(c *fiber.Ctx) error {
 			"role":                  user.Role,
 			"force_password_change": user.ForcePasswordChange,
 			"totp_enabled":          user.TOTPEnabled,
-			"enforce_2fa":           a.Config.Security.Enforce2FA && !user.TOTPEnabled && !hasWebAuthn,
+			"enforce_2fa":           a.Config.Security.Enforce2FA && user.AuthProvider == "local" && !user.TOTPEnabled && !hasWebAuthn,
 			"password_expired":      models.IsPasswordExpired(user, a.Config.Security.PasswordExpiryDays),
 		},
 	})
@@ -262,7 +262,7 @@ func (a *Admin) Me(c *fiber.Ctx) error {
 		"force_password_change": user.ForcePasswordChange,
 		"totp_enabled":          user.TOTPEnabled,
 		"webauthn_enabled":      hasWebAuthn,
-		"enforce_2fa":           a.Config.Security.Enforce2FA && !user.TOTPEnabled && !hasWebAuthn,
+		"enforce_2fa":           a.Config.Security.Enforce2FA && user.AuthProvider == "local" && !user.TOTPEnabled && !hasWebAuthn,
 		"password_expired":      models.IsPasswordExpired(user, a.Config.Security.PasswordExpiryDays),
 	})
 }
@@ -334,6 +334,6 @@ func (a *Admin) ChangePassword(c *fiber.Ctx) error {
 		"password_expired":      false,
 		"totp_enabled":          user.TOTPEnabled,
 		"webauthn_enabled":      hasWebAuthn,
-		"enforce_2fa":           a.Config.Security.Enforce2FA && !user.TOTPEnabled && !hasWebAuthn,
+		"enforce_2fa":           a.Config.Security.Enforce2FA && user.AuthProvider == "local" && !user.TOTPEnabled && !hasWebAuthn,
 	})
 }

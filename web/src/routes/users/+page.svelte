@@ -8,6 +8,7 @@
 		email: string;
 		display_name: string;
 		role: string;
+		auth_provider: string;
 		status: string;
 		force_password_change: boolean;
 		created_at: string;
@@ -28,7 +29,8 @@
 			(u) =>
 				u.email.toLowerCase().includes(q) ||
 				u.display_name.toLowerCase().includes(q) ||
-				u.role.toLowerCase().includes(q)
+				u.role.toLowerCase().includes(q) ||
+				u.auth_provider.toLowerCase().includes(q)
 		);
 	});
 
@@ -87,6 +89,14 @@
 			render: (v: unknown) => {
 				const val = v as string;
 				return val === 'active' ? 'Active' : 'Disabled';
+			}
+		},
+		{
+			key: 'auth_provider' as const,
+			label: 'Auth',
+			render: (v: unknown) => {
+				const s = v as string;
+				return s.charAt(0).toUpperCase() + s.slice(1);
 			}
 		},
 		{

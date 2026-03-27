@@ -140,7 +140,10 @@ func loadOrCreateAccount(cfg config.TLSConfig) (*acmeUser, error) {
 			return nil, fmt.Errorf("parsing account key: %w", err)
 		}
 		privKey = key
-	} else {
+	}
+
+	if privKey == nil {
+		var err error
 		privKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			return nil, fmt.Errorf("generating account key: %w", err)

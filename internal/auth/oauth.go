@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -12,13 +13,16 @@ import (
 )
 
 type OIDCProvider struct {
-	ID           string
-	ProviderType string
-	Verifier     *oidc.IDTokenVerifier
-	OAuth2Config oauth2.Config
+	ID            string
+	ProviderType  string
+	Name          string
+	GroupsClaim   string
+	RequiredGroup string
+	Verifier      *oidc.IDTokenVerifier
+	OAuth2Config  oauth2.Config
 }
 
-func NewOIDCProvider(providerType, clientID, clientSecret, issuerURL, redirectURL string) (*OIDCProvider, error) {
+func NewOIDCProvider(providerType, clientID, clientSecret, issuerURL, redirectURL, scopes, groupsClaim string) (*OIDCProvider, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -27,18 +31,28 @@ func NewOIDCProvider(providerType, clientID, clientSecret, issuerURL, redirectUR
 		return nil, fmt.Errorf("creating OIDC provider: %w", err)
 	}
 
+	scopeList := strings.Split(scopes, " ")
+	if len(scopeList) == 0 || (len(scopeList) == 1 && scopeList[0] == "") {
+		scopeList = []string{oidc.ScopeOpenID, "email", "profile"}
+	}
+
 	cfg := oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  redirectURL,
-		Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
+		Scopes:       scopeList,
+	}
+
+	if groupsClaim == "" {
+		groupsClaim = "groups"
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: clientID})
 
 	return &OIDCProvider{
 		ProviderType: providerType,
+		GroupsClaim:  groupsClaim,
 		Verifier:     verifier,
 		OAuth2Config: cfg,
 	}, nil
@@ -49,9 +63,10 @@ func (p *OIDCProvider) AuthURL(state, nonce string) string {
 }
 
 type OIDCUserInfo struct {
-	Sub         string `json:"sub"`
-	Email       string `json:"email"`
-	DisplayName string `json:"name"`
+	Sub         string   `json:"sub"`
+	Email       string   `json:"email"`
+	DisplayName string   `json:"name"`
+	Groups      []string `json:"-"`
 }
 
 func (p *OIDCProvider) Exchange(ctx context.Context, code, nonce string) (*OIDCUserInfo, error) {
@@ -79,6 +94,21 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, nonce string) (*OIDCU
 		return nil, fmt.Errorf("parsing claims: %w", err)
 	}
 
+	// Extract groups from raw claims
+	var rawClaims map[string]interface{}
+	if err := idToken.Claims(&rawClaims); err == nil {
+		if groupsRaw, ok := rawClaims[p.GroupsClaim]; ok {
+			switch g := groupsRaw.(type) {
+			case []interface{}:
+				for _, v := range g {
+					if s, ok := v.(string); ok {
+						info.Groups = append(info.Groups, s)
+					}
+				}
+			}
+		}
+	}
+
 	return &info, nil
 }
 
@@ -95,7 +125,6 @@ func FindOrCreateOIDCUser(db *sql.DB, providerType string, info *OIDCUserInfo, a
 	// Check if user exists by email (may have been created as local)
 	user, err = models.GetUserByEmail(db, info.Email)
 	if err == nil {
-		// Link OIDC to existing user — we don't update auth_provider to keep existing login working
 		return user, nil
 	}
 
@@ -108,5 +137,10 @@ func FindOrCreateOIDCUser(db *sql.DB, providerType string, info *OIDCUserInfo, a
 		role = "admin"
 	}
 
-	return models.CreateUser(db, info.Email, info.DisplayName, "", role, providerType, info.Sub, false)
+	user, err = models.CreateUser(db, info.Email, info.DisplayName, "", role, providerType, info.Sub, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }

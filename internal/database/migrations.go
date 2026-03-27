@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS model_acls (
 CREATE TABLE IF NOT EXISTS oidc_providers (
     id TEXT PRIMARY KEY,
     provider_type TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
     client_id TEXT NOT NULL,
     client_secret TEXT NOT NULL,
     client_secret_salt TEXT NOT NULL DEFAULT '',
@@ -135,4 +136,26 @@ CREATE INDEX IF NOT EXISTS idx_usage_metrics_period ON usage_metrics(period_star
 CREATE INDEX IF NOT EXISTS idx_model_acls_user ON model_acls(user_id);
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON webauthn_credentials(user_id);
 CREATE INDEX IF NOT EXISTS idx_recovery_codes_user ON recovery_codes(user_id);
+
+CREATE TABLE IF NOT EXISTS groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'local',
+    source_id TEXT NOT NULL DEFAULT '',
+    admin_role INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(name, source)
+);
+
+CREATE TABLE IF NOT EXISTS user_groups (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, group_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_groups_user ON user_groups(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_groups_group ON user_groups(group_id);
+CREATE INDEX IF NOT EXISTS idx_groups_source ON groups(source);
 `

@@ -24,6 +24,8 @@ type modelACLResponse struct {
 	ModelPattern string `json:"model_pattern"`
 	UserEmail    string `json:"user_email"`
 	Permission   string `json:"permission"`
+	GroupID      string `json:"group_id,omitempty"`
+	GroupName    string `json:"group_name,omitempty"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -65,10 +67,11 @@ func (a *Admin) ListModels(c *fiber.Ctx) error {
 
 func (a *Admin) ListModelACLs(c *fiber.Ctx) error {
 	rows, err := a.DB.Query(
-		`SELECT ma.id, ma.model, u.email, ma.allowed
+		`SELECT ma.id, ma.model, COALESCE(u.email, ''), ma.allowed, COALESCE(ma.group_id, ''), COALESCE(g.name, '')
 		 FROM model_acls ma
-		 JOIN users u ON u.id = ma.user_id
-		 ORDER BY u.email, ma.model`,
+		 LEFT JOIN users u ON u.id = ma.user_id
+		 LEFT JOIN groups g ON g.id = ma.group_id
+		 ORDER BY COALESCE(u.email, g.name), ma.model`,
 	)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to list model acls"})
@@ -77,10 +80,9 @@ func (a *Admin) ListModelACLs(c *fiber.Ctx) error {
 
 	acls := make([]modelACLResponse, 0)
 	for rows.Next() {
-		var model, email string
+		var id, model, email, groupID, groupName string
 		var allowed bool
-		var id string
-		if err := rows.Scan(&id, &model, &email, &allowed); err != nil {
+		if err := rows.Scan(&id, &model, &email, &allowed, &groupID, &groupName); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to scan model acl"})
 		}
 		permission := "deny"
@@ -92,6 +94,8 @@ func (a *Admin) ListModelACLs(c *fiber.Ctx) error {
 			ModelPattern: model,
 			UserEmail:    email,
 			Permission:   permission,
+			GroupID:      groupID,
+			GroupName:    groupName,
 			CreatedAt:    "",
 		})
 	}
@@ -103,14 +107,37 @@ func (a *Admin) CreateModelACL(c *fiber.Ctx) error {
 	var req struct {
 		ModelPattern string `json:"model_pattern"`
 		UserEmail    string `json:"user_email"`
+		GroupID      string `json:"group_id"`
 		Permission   string `json:"permission"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
 	}
 
-	if req.ModelPattern == "" || req.UserEmail == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "model_pattern and user_email are required"})
+	if req.ModelPattern == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "model_pattern is required"})
+	}
+
+	if req.UserEmail == "" && req.GroupID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "user_email or group_id is required"})
+	}
+
+	if req.UserEmail != "" && req.GroupID != "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "specify either user_email or group_id, not both"})
+	}
+
+	allowed := req.Permission == "allow"
+	id := uuid.New().String()
+
+	if req.GroupID != "" {
+		_, err := a.DB.Exec(
+			`INSERT INTO model_acls (id, user_id, model, allowed, group_id) VALUES (?, '', ?, ?, ?)`,
+			id, req.ModelPattern, allowed, req.GroupID,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create model acl"})
+		}
+		return c.Status(fiber.StatusCreated).JSON(fiber.Map{"id": id})
 	}
 
 	var userID string
@@ -119,9 +146,6 @@ func (a *Admin) CreateModelACL(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
 
-	allowed := req.Permission == "allow"
-
-	id := uuid.New().String()
 	_, err = a.DB.Exec(
 		`INSERT INTO model_acls (id, user_id, model, allowed) VALUES (?, ?, ?, ?)
 		 ON CONFLICT(user_id, model) DO UPDATE SET allowed = excluded.allowed`,

@@ -30,6 +30,7 @@ func (a *Admin) GetSettingsGeneral(c *fiber.Ctx) error {
 		Enforce2FA:               a.Config.Security.Enforce2FA,
 		PasswordExpiryDays:       a.Config.Security.PasswordExpiryDays,
 		AdminAllowedNetworks:     a.Config.Security.AdminAllowedNetworks,
+		GatewayAllowedNetworks:   a.Config.Security.GatewayAllowedNetworks,
 	}
 
 	settings, err := models.GetGeneralSettings(a.DB, defaults)
@@ -126,6 +127,28 @@ func (a *Admin) UpdateSettingsGeneral(c *fiber.Ctx) error {
 		}
 	}
 
+	if req.GatewayAllowedNetworks != "" {
+		for _, entry := range strings.Split(req.GatewayAllowedNetworks, ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			if strings.Contains(entry, "/") {
+				if _, _, err := net.ParseCIDR(entry); err != nil {
+					return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+						"error": "invalid CIDR in gateway_allowed_networks: " + entry,
+					})
+				}
+				continue
+			}
+			if net.ParseIP(entry) == nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid IP in gateway_allowed_networks: " + entry,
+				})
+			}
+		}
+	}
+
 	if req.Enforce2FA {
 		u := auth.GetUser(c)
 		admin, err := models.GetUserByID(a.DB, u.UserID)
@@ -165,6 +188,8 @@ func (a *Admin) UpdateSettingsGeneral(c *fiber.Ctx) error {
 	a.Config.Security.Enforce2FA = req.Enforce2FA
 	a.Config.Security.PasswordExpiryDays = req.PasswordExpiryDays
 	a.Config.Security.AdminAllowedNetworks = req.AdminAllowedNetworks
+	a.Config.Security.GatewayAllowedNetworks = req.GatewayAllowedNetworks
+	middleware.ParseGatewayACL(req.GatewayAllowedNetworks)
 	auth.SetUserCacheTTL(time.Duration(req.UserCacheTTL) * time.Second)
 
 	return c.JSON(req)

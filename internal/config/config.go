@@ -52,6 +52,7 @@ type SecurityConfig struct {
 	HSTSMaxAge             int    `yaml:"hsts_max_age"`
 	SecurityHeadersEnabled bool   `yaml:"security_headers_enabled"`
 	AdminAllowedNetworks   string `yaml:"admin_allowed_networks"`
+	GatewayAllowedNetworks string `yaml:"gateway_allowed_networks"`
 	EncryptionKey          string `yaml:"encryption_key"`
 }
 
@@ -366,6 +367,9 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LMGATE_ADMIN_ALLOWED_NETWORKS"); v != "" {
 		cfg.Security.AdminAllowedNetworks = v
+	}
+	if v := os.Getenv("LMGATE_GATEWAY_ALLOWED_NETWORKS"); v != "" {
+		cfg.Security.GatewayAllowedNetworks = v
 	}
 	if v := os.Getenv("LMGATE_ENCRYPTION_KEY"); v != "" {
 		cfg.Security.EncryptionKey = v

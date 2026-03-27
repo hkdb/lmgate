@@ -7,6 +7,7 @@
 	import {
 		LayoutDashboard,
 		Users,
+		UsersRound,
 		KeyRound,
 		Box,
 		ScrollText,
@@ -30,6 +31,7 @@
 	const adminNavItems = [
 		{ href: `${base}/`, label: 'Dashboard', icon: LayoutDashboard },
 		{ href: `${base}/users`, label: 'Users', icon: Users },
+		{ href: `${base}/groups`, label: 'Groups', icon: UsersRound },
 		{ href: `${base}/tokens`, label: 'API Tokens', icon: KeyRound },
 		{ href: `${base}/models`, label: 'Models', icon: Box },
 		{ href: `${base}/logs`, label: 'Logs', icon: ScrollText },

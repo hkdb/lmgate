@@ -8,8 +8,15 @@
 		id: string;
 		model_pattern: string;
 		user_email: string;
+		group_id: string;
+		group_name: string;
 		permission: string;
 		created_at: string;
+	}
+
+	interface GroupOption {
+		id: string;
+		name: string;
 	}
 
 	interface Model {
@@ -40,9 +47,12 @@
 	let showAdd = $state(false);
 	let ruleModel = $state('');
 	let ruleEmail = $state('');
+	let ruleGroupId = $state('');
+	let ruleTargetType = $state<'user' | 'group'>('user');
 	let rulePermission = $state('allow');
 	let addError = $state('');
 	let addLoading = $state(false);
+	let availableGroups = $state<GroupOption[]>([]);
 
 	// Pull model state
 	let showPull = $state(false);
@@ -66,14 +76,16 @@
 		error = '';
 		try {
 			if (auth.isAdmin) {
-				const [rulesRes, modelsRes, typeRes] = await Promise.all([
+				const [rulesRes, modelsRes, typeRes, groupsRes] = await Promise.all([
 					get<ModelACL[]>('/models/acl'),
 					get<Model[]>('/models'),
-					get<{ type: string }>('/models/upstream-type')
+					get<{ type: string }>('/models/upstream-type'),
+					get<GroupOption[]>('/groups')
 				]);
 				rules = rulesRes;
 				models = modelsRes;
 				upstreamType = typeRes.type;
+				availableGroups = groupsRes ?? [];
 			} else {
 				models = await get<Model[]>('/models');
 			}
@@ -87,6 +99,8 @@
 	function openAdd() {
 		ruleModel = '';
 		ruleEmail = '';
+		ruleGroupId = '';
+		ruleTargetType = 'user';
 		rulePermission = 'allow';
 		addError = '';
 		showAdd = true;
@@ -94,19 +108,35 @@
 
 	async function handleAdd(e: Event) {
 		e.preventDefault();
-		if (!ruleModel || !ruleEmail) {
-			addError = 'Model pattern and user email are required';
+		if (!ruleModel) {
+			addError = 'Model pattern is required';
+			return;
+		}
+
+		if (ruleTargetType === 'user' && !ruleEmail) {
+			addError = 'User email is required';
+			return;
+		}
+
+		if (ruleTargetType === 'group' && !ruleGroupId) {
+			addError = 'Group is required';
 			return;
 		}
 
 		addLoading = true;
 		addError = '';
 		try {
-			await post('/models/acl', {
+			const body: Record<string, string> = {
 				model_pattern: ruleModel,
-				user_email: ruleEmail,
 				permission: rulePermission
-			});
+			};
+			if (ruleTargetType === 'user') {
+				body.user_email = ruleEmail;
+			}
+			if (ruleTargetType === 'group') {
+				body.group_id = ruleGroupId;
+			}
+			await post('/models/acl', body);
 			showAdd = false;
 			await loadData();
 		} catch (err) {
@@ -329,7 +359,13 @@
 							{rule.permission.toUpperCase()}
 						</span>
 						<div class="flex-1">
-							<span class="text-sm font-medium">{rule.user_email}</span>
+							{#if rule.group_name}
+								<span class="rounded bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">Group</span>
+								<span class="ml-1 text-sm font-medium">{rule.group_name}</span>
+							{:else}
+								<span class="rounded bg-bg-tertiary px-1.5 py-0.5 text-xs font-medium text-text-muted">User</span>
+								<span class="ml-1 text-sm font-medium">{rule.user_email}</span>
+							{/if}
 							<span class="mx-2 text-text-muted">→</span>
 							<code class="text-sm text-accent">{rule.model_pattern}</code>
 						</div>
@@ -378,16 +414,45 @@
 					</div>
 
 					<div>
-						<label for="rule-email" class="mb-1.5 block text-sm text-text-secondary">
-							User Email
-						</label>
-						<input
-							id="rule-email"
-							type="email"
-							bind:value={ruleEmail}
-							placeholder="user@example.com"
-							class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
-						/>
+						<span class="mb-1.5 block text-sm text-text-secondary">Target</span>
+						<div class="mb-2 flex gap-2">
+							<button
+								type="button"
+								onclick={() => (ruleTargetType = 'user')}
+								class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors {ruleTargetType === 'user' ? 'bg-accent text-white' : 'border border-border-primary hover:bg-bg-tertiary'}"
+							>
+								User
+							</button>
+							<button
+								type="button"
+								onclick={() => (ruleTargetType = 'group')}
+								class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors {ruleTargetType === 'group' ? 'bg-accent text-white' : 'border border-border-primary hover:bg-bg-tertiary'}"
+							>
+								Group
+							</button>
+						</div>
+
+						{#if ruleTargetType === 'user'}
+							<input
+								id="rule-email"
+								type="email"
+								bind:value={ruleEmail}
+								placeholder="user@example.com"
+								class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
+							/>
+						{/if}
+						{#if ruleTargetType === 'group'}
+							<select
+								id="rule-group"
+								bind:value={ruleGroupId}
+								class="w-full rounded-lg border border-border-primary bg-bg-primary px-3 py-2 text-sm outline-none focus:border-accent"
+							>
+								<option value="">Select a group...</option>
+								{#each availableGroups as group}
+									<option value={group.id}>{group.name}</option>
+								{/each}
+							</select>
+						{/if}
 					</div>
 
 					<div>

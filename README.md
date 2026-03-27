@@ -22,11 +22,12 @@ LM Gate is an attempt to change that — a single component to plug into your ex
 ## ✨ Features
 ---
 
-- **Authentication** — local passwords, TOTP, WebAuthn/passkeys, JWT sessions, API tokens, and OAuth2/OIDC single sign-on
+- **Authentication** — API token authentication with JWT sessions guarded by local or OAuth2/OIDC single sign-on accounts with MFA
 - **Multi-Factor Authentication** — TOTP authenticator apps, WebAuthn/passkeys, and one-time recovery codes with optional global 2FA enforcement
 - **Password Policies** — configurable minimum length, complexity rules, expiry, max failed attempts with account lockout, and force-password-change on next login
 - **Model ACLs** — per-user allow/deny rules with wildcard patterns controlling which models can be used
 - **Rate Limiting** — per-user and per-token requests-per-minute limits with configurable global default
+- **Allow Lists** - Allow lists for the admin panel and the API proxy path
 - **Audit Logging** — separate API, admin, and security log streams with independent enable/disable toggles, per-type retention policies, and automatic daily pruning
 - **Security Event Logging** — fail2ban-ready auth failure and rate-limit event logging to stdout with `[SECURITY]` prefix
 - **Usage Metrics** — per-user, per-model token and request counts with daily/weekly/monthly aggregation, streaming vs non-streaming breakdown, and latency tracking
@@ -58,6 +59,8 @@ LM Gate uses a single `config.yaml` file. Every setting can also be overridden w
 Users and admins should technically never need to touch the config.yaml directly as there's UI in the settings page to edit runtime configurations. Any custom config at launch time should be configured with environment variables.
 
 See [docs/CONFIGS.md](docs/CONFIGS.md) for the full configuration reference.
+
+LM Gate can gate OAuth2/oidc logins by a specific user group. This works out of the box for most OAuth2 providers except for Microsoft and Google. In the case that Microsoft and Google group gating is required, an intermediary auth layer must be setup to facilitate. See [docs/MGGROUPS.md](docs/MGGROUPS.md) for details.
 
 ## 🏗️ Architecture
 ---

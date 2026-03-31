@@ -8,7 +8,7 @@ A high performance authentication and access-control gateway for LLM API backend
 ## 💡 Why
 ---
 
-Most of the self-hosted LLM frameworks are designed to be run on local host with no authentication or rate limiting. However, the machine a user directly interacts with often lacks the GPU power their use cases demand. The result is a quiet but growing crisis: infrastructure built for the desktop, quietly bleeding onto the open internet.
+Most of the self-hosted LLM frameworks are designed to be run on localhost with no authentication or rate limiting. However, the machine a user directly interacts with often lacks the GPU power their use cases demand. The result is a quiet but growing crisis: infrastructure built for the desktop, quietly bleeding onto the open internet.
 
 A joint investigation between SentinelOne SentinelLABS and Censys revealed 175,000 unique Ollama hosts across 130 countries operating without authentication, forming an "unmanaged, publicly accessible layer of AI compute infrastructure." - [source](https://thehackernews.com/2026/01/researchers-find-175000-publicly.html)
 
@@ -22,8 +22,8 @@ LM Gate is an attempt to change that — a single component to plug into your ex
 ## ✨ Features
 ---
 
-- **Authentication** — API token authentication with JWT sessions guarded by local or OAuth2/OIDC single sign-on accounts with MFA
-- **Multi-Factor Authentication** — TOTP authenticator apps, WebAuthn/passkeys, and one-time recovery codes with optional global 2FA enforcement
+- **Authentication** — API token authentication with JWT sessions managed by a web dashboard with local or OAuth2/OIDC single sign-on
+- **Multi-Factor Authentication** — TOTP authenticator apps, WebAuthn, and one-time recovery codes with optional global 2FA enforcement
 - **Password Policies** — configurable minimum length, complexity rules, expiry, max failed attempts with account lockout, and force-password-change on next login
 - **Model ACLs** — per-user allow/deny rules with wildcard patterns controlling which models can be used
 - **Rate Limiting** — per-user and per-token requests-per-minute limits with configurable global default

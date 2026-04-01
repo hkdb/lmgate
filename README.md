@@ -47,7 +47,10 @@ LM Gate is an attempt to change that — a single component to plug into your ex
 | 2 | [**Omnigate (CPU)**](docs/OMNIGATE.md) | All-in-one (Ollama + LM Gate) - CPU only |
 | 3 | [**Omnigate (NVIDIA)**](docs/OMNIGATE.md) | All-in-one (Ollama + LM Gate) with NVIDIA GPU |
 | 4 | [**Omnigate (AMD)**](docs/OMNIGATE.md) | All-in-one (Ollama + LM Gate) with AMD GPU |
-| 5 | [**Binary**](docs/BINARY.md) | Download and run the binary directly |
+| 5 | [**Omnigate (Intel)**](docs/OMNIGATE.md) | All-in-one (Ollama + LM Gate) with Intel iGPU (Experimental) |
+| 6 | [**Binary**](docs/BINARY.md) | Download and run the binary directly |
+
+**Note:** Omnigate images are for **Linux only**. macOS users should see the [Apple Silicon Guide](docs/APPLE.md) for the recommended setup using native Ollama with the standalone Docker image or binary. AMD APU users (including Ryzen AI 9 series) should use the AMD variant, as ROCm supports RDNA integrated graphics.
 
 Click on any of the environments above to get the step-by-step instructions for your environment or see [docs/INSTALL.md](docs/INSTALL.md) for step-by-step instructions for all environments in a single doc.
 

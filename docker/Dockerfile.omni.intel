@@ -1,0 +1,57 @@
+# Stage 1: Build SvelteKit frontend
+FROM node:22-alpine AS web-builder
+WORKDIR /app/web
+COPY web/package*.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Build Go binary
+FROM golang:1.25-alpine AS go-builder
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+COPY --from=web-builder /app/web/build ./web/build
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o lmgate .
+
+# Stage 3: Runtime (Intel iGPU — Experimental)
+FROM intel/oneapi-basekit:2025.1.1-0-devel-ubuntu24.04
+
+LABEL org.opencontainers.image.authors="hkdb <hkdb@3df.io>"
+LABEL org.opencontainers.image.source="https://github.com/hkdb/lmgate"
+LABEL org.opencontainers.image.title="LM Gate Intel Omnigate Image (Experimental)"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates tzdata curl gosu zstd && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Ollama
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Create users for process isolation
+RUN groupadd -r ollama && useradd -r -g ollama -m -d /home/ollama ollama && \
+    groupadd -r lmgate && useradd -r -g lmgate -M lmgate
+
+# Set up Ollama data directory
+RUN mkdir -p /home/ollama/.ollama && chown -R ollama:ollama /home/ollama/.ollama
+
+# Set up LM Gate
+WORKDIR /app
+COPY --from=go-builder /app/lmgate .
+COPY config.yaml .
+RUN mkdir -p /app/data && chown lmgate:lmgate /app/data
+
+# Copy entrypoint
+COPY docker/entrypoint-omni.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV OLLAMA_HOST=0.0.0.0:11434
+ENV LMGATE_UPSTREAM_URL=http://localhost:11434
+
+VOLUME ["/app/data", "/home/ollama/.ollama"]
+EXPOSE 443 80 8080
+
+ENTRYPOINT ["/entrypoint.sh"]

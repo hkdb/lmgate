@@ -129,12 +129,13 @@ jobs:
       - name: Prepare compose files
         run: |
           TAG="${{ needs.prepare.outputs.release_tag }}"
-          for f in docker-compose.standalone.yml \
-                   docker-compose.omni.yml \
-                   docker-compose.omni.nvidia.yml \
-                   docker-compose.omni.amd.yml; do
+          for f in docker/docker-compose.standalone.yml \
+                   docker/docker-compose.omni.yml \
+                   docker/docker-compose.omni.nvidia.yml \
+                   docker/docker-compose.omni.amd.yml \
+                   docker/docker-compose.omni.intel.yml; do
             sed "s|ghcr.io/hkdb/lmgate/\([^:]*\):latest|ghcr.io/hkdb/lmgate/\1:${TAG}|g" \
-              "$f" > "artifacts/$f"
+              "$f" > "artifacts/$(basename "$f")"
           done
 
       - name: Upload binaries to GitHub Release
@@ -150,6 +151,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
@@ -164,7 +168,8 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           context: .
-          file: Dockerfile
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/hkdb/lmgate/standalone:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/standalone:latest
 
@@ -174,6 +179,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
@@ -189,7 +197,8 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           context: .
-          file: Dockerfile.omni
+          file: docker/Dockerfile.omni
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni:latest
 
@@ -214,7 +223,7 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           context: .
-          file: Dockerfile.omni.nvidia
+          file: docker/Dockerfile.omni.nvidia
           push: true
           tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}-nvidia:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-nvidia:latest
 
@@ -239,6 +248,31 @@ jobs:
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           context: .
-          file: Dockerfile.omni.amd
+          file: docker/Dockerfile.omni.amd
           push: true
           tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}-amd:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-amd:latest
+
+  omni-intel:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push omni-intel
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
+        with:
+          context: .
+          file: docker/Dockerfile.omni.intel
+          push: true
+          tags: ghcr.io/hkdb/lmgate/omni-intel:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-intel:latest

@@ -1,27 +1,31 @@
 services:
   lmgate:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.omni
     ports:
       - "443:443"
       - "80:80"
     volumes:
       - lmgate-data:/app/data
+      - ollama-data:/home/ollama/.ollama
     environment:
       LMGATE_AUTH_JWT_SECRET: "${LMGATE_AUTH_JWT_SECRET}"
       LMGATE_ENCRYPTION_KEY: "${LMGATE_ENCRYPTION_KEY}"
       LMGATE_AUTH_ADMIN_EMAIL: "${LMGATE_AUTH_ADMIN_EMAIL:-admin@example.com}"
-      LMGATE_UPSTREAM_URL: "${LMGATE_UPSTREAM_URL:-http://host.docker.internal:11434}"
+      LMGATE_UPSTREAM_URL: "http://localhost:11434"
       LMGATE_WEBAUTHN_RP_ID: "${LMGATE_WEBAUTHN_RP_ID}"
       LMGATE_WEBAUTHN_RP_DISPLAY_NAME: "${LMGATE_WEBAUTHN_RP_DISPLAY_NAME}"
       LMGATE_WEBAUTHN_RP_ORIGINS: "${LMGATE_WEBAUTHN_RP_ORIGINS}"
       LMGATE_TELEMETRY_DISABLED: "${LMGATE_TELEMETRY_DISABLED:-false}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -o /dev/null http://127.0.0.1:${LMGATE_LISTEN:-80}/admin/api/auth/providers"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags && curl -sf -o /dev/null http://127.0.0.1:${LMGATE_LISTEN:-80}/admin/api/auth/providers"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     restart: unless-stopped
 
 volumes:
   lmgate-data:
+  ollama-data:

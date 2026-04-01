@@ -1,5 +1,13 @@
 # Changelog
 
+**v0.2.0 - 03-27-2026**
+---
+
+- Added experimental Intel iGPU omnigate images
+- Added arm based container images
+- Moved Docker related assets to docker dir
+
+
 **v0.1.0 - 03-27-2026**
 ---
 

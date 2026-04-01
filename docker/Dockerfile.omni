@@ -16,12 +16,12 @@ COPY . .
 COPY --from=web-builder /app/web/build ./web/build
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o lmgate .
 
-# Stage 3: Runtime (AMD GPU / ROCm)
-FROM rocm/dev-ubuntu-24.04:6.3.3
+# Stage 3: Runtime (CPU only)
+FROM ubuntu:24.04
 
 LABEL org.opencontainers.image.authors="hkdb <hkdb@3df.io>"
 LABEL org.opencontainers.image.source="https://github.com/hkdb/lmgate"
-LABEL org.opencontainers.image.title="LM Gate AMD Omnigate Image"
+LABEL org.opencontainers.image.title="LM Gate CPU Omnigate Image"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apt-get update && \
@@ -45,7 +45,7 @@ COPY config.yaml .
 RUN mkdir -p /app/data && chown lmgate:lmgate /app/data
 
 # Copy entrypoint
-COPY entrypoint-omni.sh /entrypoint.sh
+COPY docker/entrypoint-omni.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV OLLAMA_HOST=0.0.0.0:11434

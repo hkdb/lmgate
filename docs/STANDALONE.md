@@ -32,6 +32,6 @@ For example, if you have Ollama installed on a VM, SSH into the VM and follow th
    # One time install count telemetry ping (optional, enabled by default)
    # LMGATE_TELEMETRY_DISABLED=true
    ```
-5. Launch LM Gate: `docker compose -f docker-compose.standalone.yml up -d`
+5. Launch LM Gate: `docker compose -f docker/docker-compose.standalone.yml up -d`
 
-If you have a proxy running on the same machine and want to run it behind the proxy, run `docker compose -f docker-compose.proxied.standalone.yml` instead.
+If you have a proxy running on the same machine and want to run it behind the proxy, run `docker compose -f docker/docker-compose.proxied.standalone.yml` instead.

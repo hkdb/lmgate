@@ -18,7 +18,7 @@ LM Gate logs authentication failures and rate-limit events to stdout with a `[SE
 
 fail2ban reads log files, so you need to persist LM Gate's stdout to a file.
 
-**Docker (recommended):** Configure the container's logging driver to write to a file. Add to your `docker-compose*.yml`:
+**Docker (recommended):** Configure the container's logging driver to write to a file. Add to your `docker/docker-compose*.yml`:
 
 ```yaml
 services:

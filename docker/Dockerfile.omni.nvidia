@@ -45,7 +45,7 @@ COPY config.yaml .
 RUN mkdir -p /app/data && chown lmgate:lmgate /app/data
 
 # Copy entrypoint
-COPY entrypoint-omni.sh /entrypoint.sh
+COPY docker/entrypoint-omni.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENV OLLAMA_HOST=0.0.0.0:11434

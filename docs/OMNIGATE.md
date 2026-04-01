@@ -1,6 +1,8 @@
-# **Type 2, 3, and 4** - Omnigate - Installation Guide
+# **Type 2, 3, 4, and 5** - Omnigate - Installation Guide
 
-If you are starting fresh on a brand new VM, the `omnigate` images are the recommended way to deploy LM Gate with Ollama prepackaged in a single container for NVIDIA, AMD, and CPU-only environments.
+**Note:** Omnigate images are for **Linux only**. macOS users should see the [Apple Silicon Guide](APPLE.md) for the recommended setup using native Ollama with the standalone Docker image or binary. AMD APU users (including Ryzen AI 9 series) should use the AMD variant, as ROCm supports RDNA integrated graphics.
+
+If you are starting fresh on a brand new VM, the `omnigate` images are the recommended way to deploy LM Gate with Ollama prepackaged in a single container for NVIDIA, AMD, Intel, and CPU-only environments.
 
 For example, if you want to deploy to a fresh VM, SSH into the VM and follow these steps:
 
@@ -34,11 +36,13 @@ For example, if you want to deploy to a fresh VM, SSH into the VM and follow the
    ```
 5. Launch LM Gate: 
 
-   - CPU Only: `docker compose -f docker-compose.omni.yml up -d`
-   - AMD: `docker compose -f docker-compose.omni.amd.yml up -d`
-   - NVIDIA: `docker compose -f docker-compose.omni.nvidia.yml up -d`
+   - CPU Only: `docker compose -f docker/docker-compose.omni.yml up -d`
+   - AMD: `docker compose -f docker/docker-compose.omni.amd.yml up -d`
+   - NVIDIA: `docker compose -f docker/docker-compose.omni.nvidia.yml up -d`
+   - Intel (Experimental): `docker compose -f docker/docker-compose.omni.intel.yml up -d`
 
 If you have a proxy running on the same machine and want to run it behind the proxy, use one of these commands instead:
-- CPU Only: `docker compose -f docker-compose.proxied.omni.yml up -d`
-- AMD: `docker compose -f docker-compose.proxied.omni.amd.yml up -d`
-- NVIDIA: `docker compose -f docker-compose.proxied.omni.nvidia.yml up -d`
+- CPU Only: `docker compose -f docker/docker-compose.proxied.omni.yml up -d`
+- AMD: `docker compose -f docker/docker-compose.proxied.omni.amd.yml up -d`
+- NVIDIA: `docker compose -f docker/docker-compose.proxied.omni.nvidia.yml up -d`
+- Intel (Experimental): `docker compose -f docker/docker-compose.proxied.omni.intel.yml up -d`

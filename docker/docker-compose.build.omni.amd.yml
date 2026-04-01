@@ -1,8 +1,8 @@
 services:
   lmgate:
     build:
-      context: .
-      dockerfile: Dockerfile.omni
+      context: ..
+      dockerfile: docker/Dockerfile.omni.amd
     ports:
       - "443:443"
       - "80:80"
@@ -18,6 +18,12 @@ services:
       LMGATE_WEBAUTHN_RP_DISPLAY_NAME: "${LMGATE_WEBAUTHN_RP_DISPLAY_NAME}"
       LMGATE_WEBAUTHN_RP_ORIGINS: "${LMGATE_WEBAUTHN_RP_ORIGINS}"
       LMGATE_TELEMETRY_DISABLED: "${LMGATE_TELEMETRY_DISABLED:-false}"
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags && curl -sf -o /dev/null http://127.0.0.1:${LMGATE_LISTEN:-80}/admin/api/auth/providers"]
       interval: 30s

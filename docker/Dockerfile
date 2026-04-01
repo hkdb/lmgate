@@ -16,42 +16,25 @@ COPY . .
 COPY --from=web-builder /app/web/build ./web/build
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o lmgate .
 
-# Stage 3: Runtime (CPU only)
-FROM ubuntu:24.04
+# Stage 3: Runtime
+FROM alpine:3.19
 
 LABEL org.opencontainers.image.authors="hkdb <hkdb@3df.io>"
 LABEL org.opencontainers.image.source="https://github.com/hkdb/lmgate"
-LABEL org.opencontainers.image.title="LM Gate CPU Omnigate Image"
+LABEL org.opencontainers.image.title="LM Gate Standalone Image"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates tzdata curl gosu zstd && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install Ollama
-RUN curl -fsSL https://ollama.com/install.sh | sh
-
-# Create users for process isolation
-RUN groupadd -r ollama && useradd -r -g ollama -m -d /home/ollama ollama && \
-    groupadd -r lmgate && useradd -r -g lmgate -M lmgate
-
-# Set up Ollama data directory
-RUN mkdir -p /home/ollama/.ollama && chown -R ollama:ollama /home/ollama/.ollama
-
-# Set up LM Gate
+RUN apk add --no-cache ca-certificates tzdata su-exec && \
+    addgroup -S lmgate && adduser -S lmgate -G lmgate
 WORKDIR /app
 COPY --from=go-builder /app/lmgate .
 COPY config.yaml .
 RUN mkdir -p /app/data && chown lmgate:lmgate /app/data
 
 # Copy entrypoint
-COPY entrypoint-omni.sh /entrypoint.sh
+COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-ENV OLLAMA_HOST=0.0.0.0:11434
-ENV LMGATE_UPSTREAM_URL=http://localhost:11434
-
-VOLUME ["/app/data", "/home/ollama/.ollama"]
+VOLUME ["/app/data"]
 EXPOSE 443 80 8080
 
 ENTRYPOINT ["/entrypoint.sh"]

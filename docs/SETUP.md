@@ -165,6 +165,7 @@ open http://localhost:8080/admin
 | `make docker-omni` | Build Omnigate Docker image (CPU only) |
 | `make docker-omni-nvidia` | Build Omnigate Docker image (NVIDIA GPU) |
 | `make docker-omni-amd` | Build Omnigate Docker image (AMD GPU) |
+| `make docker-omni-intel` | Build Omnigate Docker image (Intel iGPU — Experimental) |
 | `make clean` | Remove build artifacts |
 
 

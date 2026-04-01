@@ -1,4 +1,4 @@
-# **Type 5** - Binary - Installation Guide
+# **Type 6** - Binary - Installation Guide
 
 You can also download and run the binary in any environment separately.
 

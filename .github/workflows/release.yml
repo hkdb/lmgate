@@ -155,44 +155,67 @@ jobs:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           files: artifacts/*
 
-  standalone:
+  standalone-build:
     needs: prepare
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
       - name: Log in to GHCR
+        if: needs.prepare.outputs.is_build_test != 'true'
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push standalone
+      - name: Build standalone
+        id: build
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
-          tags: ghcr.io/hkdb/lmgate/standalone:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/standalone:latest
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/hkdb/lmgate/standalone,push-by-digest=true,name-canonical=true,push=${{ needs.prepare.outputs.is_build_test != 'true' }}
 
-  omni:
-    needs: prepare
+      - name: Export digest
+        if: needs.prepare.outputs.is_build_test != 'true'
+        run: |
+          mkdir -p /tmp/digests/standalone
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/standalone/${digest#sha256:}"
+
+      - name: Upload digest
+        if: needs.prepare.outputs.is_build_test != 'true'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: standalone-digests-${{ matrix.runner }}
+          path: /tmp/digests/standalone/*
+          if-no-files-found: error
+          retention-days: 1
+
+  standalone-merge:
+    needs: [prepare, standalone-build]
+    if: needs.prepare.outputs.is_build_test != 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3
+      - name: Download digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: /tmp/digests/standalone
+          pattern: standalone-digests-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
@@ -204,14 +227,93 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push omni (CPU)
+      - name: Create manifest list and push
+        working-directory: /tmp/digests/standalone
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/hkdb/lmgate/standalone:${{ needs.prepare.outputs.release_tag }} \
+            -t ghcr.io/hkdb/lmgate/standalone:latest \
+            $(printf 'ghcr.io/hkdb/lmgate/standalone@sha256:%s ' *)
+
+  omni-build:
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        if: needs.prepare.outputs.is_build_test != 'true'
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build omni (CPU)
+        id: build
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
           context: .
           file: docker/Dockerfile.omni
-          platforms: linux/amd64,linux/arm64
-          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
-          tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni:latest
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=ghcr.io/hkdb/lmgate/omni,push-by-digest=true,name-canonical=true,push=${{ needs.prepare.outputs.is_build_test != 'true' }}
+
+      - name: Export digest
+        if: needs.prepare.outputs.is_build_test != 'true'
+        run: |
+          mkdir -p /tmp/digests/omni
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/omni/${digest#sha256:}"
+
+      - name: Upload digest
+        if: needs.prepare.outputs.is_build_test != 'true'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: omni-digests-${{ matrix.runner }}
+          path: /tmp/digests/omni/*
+          if-no-files-found: error
+          retention-days: 1
+
+  omni-merge:
+    needs: [prepare, omni-build]
+    if: needs.prepare.outputs.is_build_test != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: /tmp/digests/omni
+          pattern: omni-digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests/omni
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}:${{ needs.prepare.outputs.release_tag }} \
+            -t ghcr.io/hkdb/lmgate/omni:latest \
+            $(printf 'ghcr.io/hkdb/lmgate/omni@sha256:%s ' *)
 
   omni-nvidia:
     needs: prepare

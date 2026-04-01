@@ -1,6 +1,6 @@
 # Changelog
 
-**v0.2.0 - 03-27-2026**
+**v0.2.0 - 04-01-2026**
 ---
 
 - Added experimental Intel iGPU omnigate images

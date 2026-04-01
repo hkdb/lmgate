@@ -32,7 +32,8 @@ RUN apt-get update && \
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # Create users for process isolation
-RUN groupadd -r ollama && useradd -r -g ollama -m -d /home/ollama ollama && \
+RUN (getent group ollama || groupadd -r ollama) && \
+    (id -u ollama &>/dev/null || useradd -r -g ollama -m -d /home/ollama ollama) && \
     groupadd -r lmgate && useradd -r -g lmgate -M lmgate
 
 # Set up Ollama data directory

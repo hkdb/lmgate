@@ -16,6 +16,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.tag.outputs.release_tag }}
       ollama_ver: ${{ steps.ollama.outputs.ollama_ver }}
+      is_build_test: ${{ steps.check.outputs.is_build_test }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -39,10 +40,20 @@ jobs:
           OLLAMA_VER=$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest | jq -r '.tag_name')
           echo "ollama_ver=$OLLAMA_VER" >> "$GITHUB_OUTPUT"
 
+      - name: Check if build-test tag
+        id: check
+        run: |
+          if [[ "${{ steps.tag.outputs.release_tag }}" == *-build* ]]; then
+            echo "is_build_test=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_build_test=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Log resolved values
         run: |
           echo "Release tag: ${{ steps.tag.outputs.release_tag }}"
           echo "Ollama version: ${{ steps.ollama.outputs.ollama_ver }}"
+          echo "Build test: ${{ steps.check.outputs.is_build_test }}"
 
   build-binaries:
     if: github.event_name == 'push'
@@ -170,7 +181,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
           tags: ghcr.io/hkdb/lmgate/standalone:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/standalone:latest
 
   omni:
@@ -199,7 +210,7 @@ jobs:
           context: .
           file: docker/Dockerfile.omni
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
           tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni:latest
 
   omni-nvidia:
@@ -224,7 +235,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.omni.nvidia
-          push: true
+          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
           tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}-nvidia:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-nvidia:latest
 
   omni-amd:
@@ -249,7 +260,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.omni.amd
-          push: true
+          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
           tags: ghcr.io/hkdb/lmgate/omni-${{ needs.prepare.outputs.ollama_ver }}-amd:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-amd:latest
 
   omni-intel:
@@ -274,5 +285,5 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.omni.intel
-          push: true
+          push: ${{ needs.prepare.outputs.is_build_test != 'true' }}
           tags: ghcr.io/hkdb/lmgate/omni-intel:${{ needs.prepare.outputs.release_tag }},ghcr.io/hkdb/lmgate/omni-intel:latest

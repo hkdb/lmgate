@@ -1,5 +1,11 @@
 # Changelog
 
+**v0.2.1 - 04-30-2026**
+---
+
+- Fixed GA so that the workflow can be successfully re-run to update the docker images with the latest release of Ollama without releasing a new version of LM Gate.
+
+
 **v0.2.0 - 04-01-2026**
 ---
 

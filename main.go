@@ -40,7 +40,7 @@ import (
 )
 
 // Version of LM Gate.
-var Version = "v0.2.0"
+var Version = "v0.2.1"
 
 //go:embed all:web/build
 var webAssets embed.FS

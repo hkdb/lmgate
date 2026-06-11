@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+  schedule:
+    # Rebuild images weekly (Mondays) to pick up the latest Ollama release.
+    # Skips binary builds and GitHub Release upload.
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: write
